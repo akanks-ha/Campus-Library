@@ -1,0 +1,22 @@
+{
+  "name": "campus-library",
+  "version": "1.0.0",
+  "description": "Tutorial 7 Campus Library GraphQL demo",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "graphql",
+    "apollo",
+    "mysql",
+    "tutorial"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@apollo/server": "^4.12.2",
+    "graphql": "^16.11.0",
+    "mysql2": "^3.14.1"
+  }
+}

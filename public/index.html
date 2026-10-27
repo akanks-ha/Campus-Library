@@ -1,0 +1,292 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Campus Library</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <main class="page">
+
+    <header>
+      <p class="eyebrow">Campus Collection</p>
+      <h1>Campus Library</h1>
+      <p class="sub">A simple space for authors, books and ideas.</p>
+      <p class="header-note">Discover something new. One book at a time.</p>
+    </header>
+
+    <section class="panel">
+      <h2 class="form-heading">Add a Book</h2>
+      <p class="form-description">
+        Add a new title to your library collection.
+      </p>
+
+      <form id="addForm">
+        <div class="field field-title">
+          <label for="title">Book title</label>
+          <input
+            id="title"
+            type="text"
+            placeholder="Enter book title"
+            maxlength="200"
+            required
+          >
+        </div>
+
+        <div class="field">
+          <label for="year">Publication year</label>
+          <input
+            id="year"
+            type="number"
+            placeholder="e.g. 2025"
+            min="1"
+            max="2100"
+          >
+        </div>
+
+        <div class="field field-author">
+          <label for="authorId">Select author</label>
+          <select id="authorId" required>
+            <option value="">Loading authors...</option>
+          </select>
+        </div>
+
+        <button id="submitButton" type="submit">Add Book</button>
+      </form>
+    </section>
+
+    <section>
+      <div class="collection-heading">
+        <div>
+          <h2>Our Authors</h2>
+          <p>Explore the books in your collection.</p>
+        </div>
+        <span class="count" id="authorCount">0 authors</span>
+      </div>
+
+      <p id="status" role="status" aria-live="polite">
+        Connecting to your library...
+      </p>
+
+      <div id="list"></div>
+    </section>
+
+    <footer>
+      Campus Library <span aria-hidden="true">·</span>
+      <strong>Powered by GraphQL</strong>
+    </footer>
+
+  </main>
+
+  <script>
+    const API = "http://localhost:4000/";
+
+    async function gql(query, variables = {}) {
+      const response = await fetch(API, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ query, variables })
+      });
+
+      const json = await response.json();
+
+      if (!response.ok || json.errors) {
+        throw new Error(
+          json.errors?.[0]?.message || "Request failed"
+        );
+      }
+
+      return json.data;
+    }
+
+    const status = document.getElementById("status");
+    const list = document.getElementById("list");
+    const authorSelect = document.getElementById("authorId");
+    const authorCount = document.getElementById("authorCount");
+    const submitButton = document.getElementById("submitButton");
+
+    function createElement(tag, className, text) {
+      const element = document.createElement(tag);
+      if (className) element.className = className;
+      if (text !== undefined) element.textContent = text;
+      return element;
+    }
+
+    function renderAuthors(authors) {
+      list.replaceChildren();
+      authorSelect.replaceChildren();
+
+      const placeholder = createElement(
+        "option",
+        "",
+        "Choose an author"
+      );
+      placeholder.value = "";
+      authorSelect.appendChild(placeholder);
+
+      for (const author of authors) {
+        const option = createElement("option", "", author.name);
+        option.value = author.id;
+        authorSelect.appendChild(option);
+
+        const card = createElement("article", "author-card");
+
+        const heading = createElement("div", "author-heading");
+        const initials = author.name
+          .trim()
+          .split(/\s+/)
+          .slice(0, 2)
+          .map(part => part.charAt(0).toUpperCase())
+          .join("");
+
+        const avatar = createElement("div", "author-avatar", initials);
+        const details = createElement("div");
+        const name = createElement("h3", "", author.name);
+        const country = createElement(
+          "div",
+          "country",
+          author.country || "Country not specified"
+        );
+
+        details.append(name, country);
+        heading.append(avatar, details);
+        card.appendChild(heading);
+
+        const books = author.books || [];
+        card.appendChild(
+          createElement("div", "books-label", `BOOKS (${books.length})`)
+        );
+
+        if (books.length === 0) {
+          card.appendChild(
+            createElement("div", "empty-books", "No books added yet.")
+          );
+        } else {
+          for (const book of books) {
+            const row = createElement("div", "book");
+            const title = createElement("span", "book-title", book.title);
+            const year = createElement(
+              "span",
+              "book-year",
+              book.year ?? "Year unknown"
+            );
+
+            row.append(title, year);
+            card.appendChild(row);
+          }
+        }
+
+        list.appendChild(card);
+      }
+
+      authorCount.textContent =
+        `${authors.length} ${authors.length === 1 ? "author" : "authors"}`;
+    }
+
+    async function load() {
+      status.textContent = "Loading your collection...";
+
+      try {
+        const data = await gql(`
+          query {
+            authors {
+              id
+              name
+              country
+              books {
+                id
+                title
+                year
+              }
+            }
+          }
+        `);
+
+        renderAuthors(data.authors || []);
+
+        status.textContent = data.authors?.length
+          ? "Your library is up to date."
+          : "No authors found in your library.";
+      } catch (error) {
+        status.textContent = "Could not load library: " + error.message;
+        authorSelect.replaceChildren();
+
+        const option = createElement(
+          "option",
+          "",
+          "Could not load authors"
+        );
+        option.value = "";
+        authorSelect.appendChild(option);
+      }
+    }
+
+    document.getElementById("addForm").addEventListener(
+      "submit",
+      async (event) => {
+        event.preventDefault();
+
+        const title = document.getElementById("title").value.trim();
+        const yearText = document.getElementById("year").value;
+        const authorId = authorSelect.value;
+
+        if (!title || !authorId) {
+          status.textContent = "Please enter a title and choose an author.";
+          return;
+        }
+
+        const year = yearText ? Number(yearText) : null;
+
+        if (
+          year !== null &&
+          (!Number.isInteger(year) || year < 1 || year > 2100)
+        ) {
+          status.textContent = "Please enter a valid publication year.";
+          return;
+        }
+
+        submitButton.disabled = true;
+        status.textContent = "Adding your book...";
+
+        try {
+          await gql(`
+            mutation AddBook(
+              $title: String!,
+              $year: Int,
+              $authorId: ID!
+            ) {
+              addBook(
+                title: $title,
+                year: $year,
+                authorId: $authorId
+              ) {
+                id
+                title
+              }
+            }
+          `, {
+            title,
+            year,
+            authorId
+          });
+
+          event.target.reset();
+          await load();
+          status.textContent = "Book added successfully!";
+        } catch (error) {
+          status.textContent = "Could not add book: " + error.message;
+        } finally {
+          submitButton.disabled = false;
+        }
+      }
+    );
+
+    load();
+  </script>
+</body>
+</html>
